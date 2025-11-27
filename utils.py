@@ -1,16 +1,16 @@
 import os
+import tempfile
+import uuid
 
 import streamlit as st
-import requests
-import tempfile
 from jamaibase import JamAI, protocol
 
 # --- Configuration & Mock JAM AI Integration ---
 
 # WARNING: In a production environment, NEVER expose API keys directly in client-side code.
 # Use environment variables (st.secrets) and a secure backend for actual API calls.
-JAMAI_API_KEY = "jamai_pat_a59027c453d19180e5ae618d354f06ea46945119f4c7fa73"
-JAMAI_PROJECT_ID = "proj_1a4e3e0cd27283a48655bf49"
+JAMAI_API_KEY = "jamai_pat_23748a43d10e3651a516d2c0758aac37473bd392177a4eed"
+JAMAI_PROJECT_ID = "proj_db0bde09a1a60ca9f4932bb7"
 JAMAI_TABLE_ID = "FAQ"  # The ID of your JamAI Table
 
 # Initialize JamAI client
@@ -216,6 +216,35 @@ def embed_files_into_table(table_id: str, file):
     )
 
     return response
+
+
+def create_new_chat_table(table_id_src):
+    new_table_id = f"chat_{str(uuid.uuid4())[:8]}"
+
+    try:
+        jamai_client.table.duplicate_table(
+            table_type="chat",
+            table_id_src=table_id_src,  # Your base agent ID
+            table_id_dst=new_table_id,
+            include_data=True,
+            create_as_child=True
+        )
+        return new_table_id
+    except Exception as e:
+        print(f"Error creating new chat: {str(e)}")
+        return None
+
+
+def delete_table(table_type, table_id):
+
+    try:
+        jamai_client.table.delete_table(table_type=table_type, table_id=table_id)
+        return True
+
+    except Exception as e:
+        print(f"Error deleting chat: {str(e)}")
+        return False
+
 
 def check_staff_login():
     """Checks if the user is logged in as staff and redirects if not."""
