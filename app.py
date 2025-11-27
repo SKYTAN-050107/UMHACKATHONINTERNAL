@@ -42,7 +42,7 @@ with col1:
     st.page_link("pages/public_faq_chat.py", label="📚 Clinic FAQs Chatbot", icon="📚", use_container_width=True)
 
 with col2:
-    st.page_link("pages/public_gk_chat.py", label="💊 General Health Chatbot", icon="💊", use_container_width=True)
+    st.page_link("pages/public_GK_chat.py", label="💊 General Health Chatbot", icon="💊", use_container_width=True)
 
 st.markdown("---")
 

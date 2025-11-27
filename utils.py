@@ -1,14 +1,17 @@
+import os
+
 import streamlit as st
 import requests
+import tempfile
 from jamaibase import JamAI, protocol
 
 # --- Configuration & Mock JAM AI Integration ---
 
 # WARNING: In a production environment, NEVER expose API keys directly in client-side code.
 # Use environment variables (st.secrets) and a secure backend for actual API calls.
-JAMAI_API_KEY = "jamai_pat_68b1c83ebdb2469ecc6552427a803fb0ff9e96b85b91a25c"
-JAMAI_PROJECT_ID = "proj_56f49eb1a5c292ee70c39a58"
-JAMAI_TABLE_ID = "Multilingual_Frontline_Agent" # The ID of your JamAI Table
+JAMAI_API_KEY = "jamai_pat_a59027c453d19180e5ae618d354f06ea46945119f4c7fa73"
+JAMAI_PROJECT_ID = "proj_1a4e3e0cd27283a48655bf49"
+JAMAI_TABLE_ID = "FAQ"  # The ID of your JamAI Table
 
 # Initialize JamAI client
 # Note: The SDK uses 'token' instead of 'api_key' in newer versions, but we'll use what works.
@@ -33,21 +36,21 @@ def get_jam_ai_response(project_id, user_message, model_context):
         if "staff" in model_context.lower():
             user_role = "Staff"
         
-        # Prepare row data with metadata for logging
-        row_data = {
-            "User": user_message,
-            "Session ID": session_id,
-            "User Role": user_role
-        }
+        # # Prepare row data with metadata for logging
+        # row_data = {
+        #     "User": user_message,
+        #     "Session ID": session_id,
+        #     "User Role": user_role
+        # }
         
         # Debugging: Print data being sent
-        print(f"DEBUG: Sending row data to JamAI: {row_data}")
+        print(f"DEBUG: Sending row data to JamAI: {user_message}")
 
         completion = jamai_client.table.add_table_rows(
-            table_type="chat",
+            table_type="action",
             request=protocol.MultiRowAddRequest(
                 table_id=JAMAI_TABLE_ID,
-                data=[row_data], 
+                data=[{"usr_input": user_message}],
                 stream=False # We wait for the full response for simplicity in this Streamlit app
             )
         )
@@ -64,8 +67,8 @@ def get_jam_ai_response(project_id, user_message, model_context):
             print(f"DEBUG: Received columns from JamAI: {list(row_columns.keys())}")
             
             # Find the 'AI' column or the last column which usually contains the response
-            if "AI" in row_columns:
-                return row_columns["AI"].text
+            if "user_output" in row_columns:
+                return f"User: {user_message}\n Action Table: {row_columns["user_output"].text}"
             else:
                 # Fallback: return the text of the last column
                 return list(row_columns.values())[-1].text
@@ -74,6 +77,145 @@ def get_jam_ai_response(project_id, user_message, model_context):
 
     except Exception as e:
         return f"Error connecting to JamAI: {str(e)}"
+
+
+def get_jam_ai_response_admin(project_id, user_message, model_context):
+    """
+    Function to call the JAM AI API using the Table interface.
+    This ensures we use the specific project/table configuration (models, prompts) you built in JamAI.
+    """
+
+    try:
+        # We use the 'add_table_rows' method to send the user message to the table.
+        # This triggers the AI column generation based on your table's configuration.
+
+        # Retrieve session_id from Streamlit state if available
+        session_id = st.session_state.get('session_id', 'unknown_session')
+
+        # Determine User Role based on context or state
+        user_role = "Public"
+        if "staff" in model_context.lower():
+            user_role = "Staff"
+
+        # # Prepare row data with metadata for logging
+        # row_data = {
+        #     "User": user_message,
+        #     "Session ID": session_id,
+        #     "User Role": user_role
+        # }
+
+        # Debugging: Print data being sent
+        print(f"DEBUG: Sending row data to JamAI: {user_message}")
+
+        completion = jamai_client.table.add_table_rows(
+            table_type="action",
+            request=protocol.MultiRowAddRequest(
+                table_id="staff FAQ",
+                data=[{"usr_input": user_message}],
+                stream=False  # We wait for the full response for simplicity in this Streamlit app
+            )
+        )
+
+        # The response structure for add_table_rows (non-streaming) contains the rows.
+        # We need to extract the AI's response from the output column.
+        # Assuming the output column is named 'AI' based on standard JamAI chat tables.
+
+        if completion.rows and len(completion.rows) > 0:
+            # Get the first row's columns
+            row_columns = completion.rows[0].columns
+
+            # Debugging: Print received columns to console
+            print(f"DEBUG: Received columns from JamAI: {list(row_columns.keys())}")
+
+            # Find the 'AI' column or the last column which usually contains the response
+            if "user_output" in row_columns:
+                return f"User: {user_message}\n Action Table: {row_columns["user_output"].text}"
+            else:
+                # Fallback: return the text of the last column
+                return list(row_columns.values())[-1].text
+        else:
+            return "Error: No response received from JamAI Table."
+
+    except Exception as e:
+        return f"Error connecting to JamAI: {str(e)}"
+
+
+def post_chat_table(project_id, user_message, model_context, table_id):
+
+    try:
+
+        # Retrieve session_id from Streamlit state if available
+        session_id = st.session_state.get('session_id', 'unknown_session')
+
+        # Determine User Role based on context or state
+        user_role = "Public"
+        if "staff" in model_context.lower():
+            user_role = "Staff"
+
+        # # Prepare row data with metadata for logging
+        # row_data = {
+        #     "User": user_message,
+        #     "Session ID": session_id,
+        #     "User Role": user_role
+        # }
+
+        # Debugging: Print data being sent
+        print(f"DEBUG chat: Sending row data to JamAI: {user_message}")
+
+        completion = jamai_client.table.add_table_rows(
+            table_type="chat",
+            request=protocol.MultiRowAddRequest(
+                table_id=table_id,
+                data=[{"User": user_message}],
+                stream=False  # We wait for the full response for simplicity in this Streamlit app
+            )
+        )
+
+        # The response structure for add_table_rows (non-streaming) contains the rows.
+        # We need to extract the AI's response from the output column.
+        # Assuming the output column is named 'AI' based on standard JamAI chat tables.
+
+        if completion.rows and len(completion.rows) > 0:
+            # Get the first row's columns
+            row_columns = completion.rows[0].columns
+
+            # Debugging: Print received columns to console
+            print(f"DEBUG: Received columns from JamAI: {list(row_columns.keys())}")
+
+            # Find the 'AI' column or the last column which usually contains the response
+            if "user_output" in row_columns:
+                return f"User: {user_message}\n Action Table: {row_columns["user_output"].text}"
+            else:
+                # Fallback: return the text of the last column
+                return list(row_columns.values())[-1].text
+        else:
+            return "Error: No response received from JamAI Table."
+
+    except Exception as e:
+        return f"Error connecting to JamAI: {str(e)}"
+
+def embed_files_into_table(table_id: str, file):
+    """
+    Embeds a file uploaded from Streamlit into a JamAI table.
+    'file' is a Streamlit UploadedFile.
+    """
+
+    # Extract the original filename (this includes the extension)
+    filename = file.name
+
+    # Create a temporary file with the same extension
+    suffix = os.path.splitext(filename)[1]  # e.g. ".pdf", ".txt"
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(file.getbuffer())  # write the file contents
+        tmp_path = tmp.name  # get the actual file path
+
+    response = jamai_client.table.embed_file(
+        file_path=tmp_path,
+        table_id=table_id,
+    )
+
+    return response
 
 def check_staff_login():
     """Checks if the user is logged in as staff and redirects if not."""
